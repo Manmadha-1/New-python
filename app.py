@@ -8,10 +8,10 @@ import re
 def create_connection():
     try:
         connection = mysql.connector.connect(
-            host='database-1.ctwkcywuyqju.us-east-1.rds.amazonaws.com',
+            host='st-python-db.ctwkcywuyqju.us-east-1.rds.amazonaws.com',
             user='admin',
             password='TOP2020%',
-            database='database-1'
+            database='python_db'
         )
         return connection
     except Error as e:
