@@ -1,12 +1,10 @@
 import streamlit as st
-import tabula
+from tabula import read_pdf
 import mysql.connector
 from mysql.connector import Error
 import pandas as pd
-import logging
 import os
 
-logging.basicConfig(level=logging.DEBUG)
 
 # create a connection to the MySQL database
 def create_connection():
@@ -18,11 +16,9 @@ def create_connection():
             database='python_db'
         )
         if conn.is_connected():
-            #logging.debug("Connected to the database")
             return conn
     except Error as e:
         st.error(f"Error connecting to database: {e}")
-        #logging.error(f"Error connecting to database: {e}")
     return None
 
 # Create the table if it doesn't exist
@@ -46,21 +42,25 @@ def create_table():
             conn.commit()
         except Error as e:
             st.error(f"Error creating table: {e}")
-            #logging.error(f"Error creating table: {e}")
         finally:
             cursor.close()
             conn.close()
 
 # Function to extract table data from PDF
 def extract_data_from_pdf(pdf_file):
-    tables = tabula.read_pdf(pdf_file, pages='all', multiple_tables=True)
+    tables = read_pdf(pdf_file, pages='all', multiple_tables=True)
     if tables:
-        return tables[0].to_dict(orient='records')
+        df = tables[0] # Assuming the first table contains the data
+        df.dropna(how='all', inplace=True)  # Drop rows where all columns are NaN
+        return df.to_dict(orient='records')
     return []
 
 # Function to insert or update data into the database based on email
 def insert_or_update_data(data):
     required_fields = ["Email", "First Name", "Last Name", "Phone", "Age", "Message"]
+    if not any(data.values()):
+        return False
+
     missing_fields = [field for field in required_fields if not data.get(field)]
 
     if not missing_fields:
@@ -91,14 +91,12 @@ def insert_or_update_data(data):
                 return True
             except Error as e:
                 st.error(f"Error inserting or updating data for Email: {data.get('Email', 'N/A')}.")
-                #logging.error(f"Error inserting or updating data: {e}")
                 return False
             finally:
                 cursor.close()
                 conn.close()
     else:
         st.warning(f"Record for Email: {data.get('Email', 'N/A')} skipped due to missing fields.")
-        #logging.warning(f"Missing fields for record: {data}")
         return False
 
 # Streamlit app
@@ -121,10 +119,12 @@ def main():
                 success_count = 0
                 failure_count = 0
                 for record in extracted_data:
-                    if insert_or_update_data(record):
-                        success_count += 1
-                    else:
-                        failure_count += 1
+                    if any(record.values()):  # Check if the row is not empty
+                        if insert_or_update_data(record):
+                            success_count += 1
+                        else:
+                            failure_count += 1
+                            
                 st.success(f"Number of records inserted or updated: {success_count}")
                 st.error(f"Number of records failed: {failure_count}")
         else:
